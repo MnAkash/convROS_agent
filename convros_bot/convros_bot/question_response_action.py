@@ -21,7 +21,7 @@ from bs4 import BeautifulSoup
 from rclpy.action import ActionServer, GoalResponse, CancelResponse
 from convros_bot.speechRecognizer_main import speechRecognizer
 from convros_bot.tts_main import TTS
-
+import re
 from ament_index_python.packages import get_package_share_directory
 
 share_directory = get_package_share_directory('convros_bot')
@@ -82,35 +82,56 @@ class QuestionResponseActionServer(Node):
 
         self.isAwake = True # Activate the speech recognizer
         # print("Asked, will start loop")
+        count = 0 
         while self.isAwake:
+            print(goal_handle.is_cancel_requested)
             if goal_handle.is_cancel_requested:
                 self.get_logger().info('Conversation cancelled')
                 goal_handle.canceled()
                 self.isAwake = False # deactivate the speech recognizer
                 return QuestionResponseRequest.Result(response="canceled")
             
-            if len(self.speech_text_queue):
-                speech_text = self.speech_text_queue.pop(0)
-                
-                if "yes" in speech_text:
-                    self.response = "yes"
-                    self.isAwake = False
-                elif "no" in speech_text:
+            while True:
+                if count < 3:   
+                    if len(self.speech_text_queue):
+                        speech_text = self.speech_text_queue.pop(0)
+                        # print(speech_text)
+                        # if "yes" in speech_text:
+                        if bool(re.search(r'\byes\b', speech_text, re.IGNORECASE)):
+                            self.response = "yes"
+                            self.tts.speak("I got a yes")
+                            self.isAwake = False
+                            break
+                        
+                        # elif "no" in speech_text:
+                        # Check if 'no' appears as a standalone word
+                        elif bool(re.search(r'\bno\b', speech_text, re.IGNORECASE)):
+                            self.response = "no"
+                            self.tts.speak("I got a no")
+                            self.isAwake = False
+                            break
+
+                    # Calculate how long conversation is active
+                    self.timeElapsed = round(time.time()-self.start_time, 2)
+                    # print("self.timeElapsed", self.timeElapsed)
+                    if self.timeElapsed > 10:
+                        count +=1
+                        if count < 3: 
+                            print("I didnt get that. I will try again")
+                            self.tts.speak("I didnt get that. I will try again") # Ask the question again
+                            self.tts.speak(question)
+                            self.start_time = time.time()
+                        
+                else:
+                    self.tts.speak("Okay. I consider that as a no")
                     self.response = "no"
                     self.isAwake = False
-
-            # Calculate how long conversation is active
-            self.timeElapsed = round(time.time()-self.start_time, 2)
-
-            if self.timeElapsed > 30:
-                self.tts.speak("Okay. I consider that as a no")
-                self.response = "no"
-                self.isAwake = False
-
+                    break
+                
             # Optional feedback about progress (e.g., time elasped)
-            feedback_msg.seconds_running = self.timeElapsed
+            # feedback_msg.seconds_running = self.timeElapsed
+            # goal_handle.publish_feedback(feedback_msg)
             
-            goal_handle.publish_feedback(feedback_msg)
             rate.sleep()  # Control recording frequency
 
         self.isAwake = False # Deactivate the speech recognizer
@@ -125,7 +146,8 @@ class QuestionResponseActionServer(Node):
     def speech_registrar(self, text):
         self.get_logger().info(f'Received: {text}')
         self.speech_text_queue.append(text.lower())  # Convert to lowercase for easier matching
-
+        print("speech_registrar")
+        
     def speech_manager(self):
         if self.isAwake:
             # self.get_logger().info(f'speak......')
