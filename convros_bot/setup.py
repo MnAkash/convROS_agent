@@ -32,7 +32,7 @@ setup(
             'speech_processor = convros_bot.speech_processor:main',
 
             'conversation_action = convros_bot.conversation_action:main',
-            'question_response_action = convros_bot.question_response_action:main',
+            'question_response_action = convros_bot.question_test_action:main',
         ],
     },
 )

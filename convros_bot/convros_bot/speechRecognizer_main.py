@@ -10,7 +10,7 @@ class speechRecognizer():
     def __init__(self):
         # print("Wait until it says 'speak now'")
         print("Intializing speech recognizer")
-        self.recorder = AudioToTextRecorder(model = 'base.en', input_device_index=0, spinner=True, 
+        self.recorder = AudioToTextRecorder(model = 'base.en', input_device_index=5, spinner=True, 
                                        min_gap_between_recordings=0.5, silero_sensitivity=0.8, webrtc_sensitivity=2,
                                        min_length_of_recording = 0.5)
     def process_text(self, text):

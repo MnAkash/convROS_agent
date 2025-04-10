@@ -12,7 +12,7 @@ from rclpy.node import Node
 from std_msgs.msg import String, Empty
 import time, os
 from action_msgs.msg import GoalStatus
-from convros_interfaces.action import QuestionResponseRequest
+from shr_msgs.action import QuestionResponseRequest
 from rclpy.executors import MultiThreadedExecutor
 import random
 from datetime import datetime
@@ -40,6 +40,7 @@ class QuestionResponseActionServer(Node):
 
         self.response = "" # Will store response here
         self.isAwake = False #if speech recognizer is active
+        self.is_hearing = False
 
         # Setup speech recognizer
         self.recognizer = speechRecognizer()
@@ -81,6 +82,7 @@ class QuestionResponseActionServer(Node):
         self.speech_text_queue = [] # Make speech queue empty
 
         self.isAwake = True # Activate the speech recognizer
+        self.is_hearing = True
         # print("Asked, will start loop")
         count = 0 
         while self.isAwake:
@@ -114,18 +116,21 @@ class QuestionResponseActionServer(Node):
                     # Calculate how long conversation is active
                     self.timeElapsed = round(time.time()-self.start_time, 2)
                     # print("self.timeElapsed", self.timeElapsed)
-                    if self.timeElapsed > 10:
+                    if self.timeElapsed > 15:
                         count +=1
                         if count < 3: 
                             print("I didnt get that. I will try again")
-                            self.tts.speak("I didnt get that. I will try again") # Ask the question again
+                            self.is_hearing = False
+                            self.tts.speak("I didnt hear anything.") # Ask the question again
                             self.tts.speak(question)
                             self.start_time = time.time()
+                            self.is_hearing = True
                         
                 else:
                     self.tts.speak("Okay. I consider that as a no")
                     self.response = "no"
                     self.isAwake = False
+                    self.is_hearing = False
                     break
                 
             # Optional feedback about progress (e.g., time elasped)
@@ -149,7 +154,7 @@ class QuestionResponseActionServer(Node):
         print("speech_registrar")
         
     def speech_manager(self):
-        if self.isAwake:
+        if self.isAwake and self.is_hearing:
             # self.get_logger().info(f'speak......')
             try:
                 self.recognizer.recorder.text(self.speech_registrar)
