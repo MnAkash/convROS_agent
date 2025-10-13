@@ -12,6 +12,13 @@ from rclpy.action import GoalResponse, CancelResponse
 from RealtimeSTT import AudioToTextRecorder
 from gtts import gTTS
 
+import speech_recognition as sr
+import os
+
+# set output and input device by following command:
+os.environ["PULSE_SINK"] = "alsa_output.usb-Generic_USB2.0_Device_20121120222016-00.analog-stereo"
+os.environ["PULSE_SOURCE"] = "alsa_input.usb-SEEED_ReSpeaker_4_Mic_Array__UAC1.0_-00.multichannel-input"
+
 class TTS:
     def __init__(self, zmq_socket):
         """ Initialize the TTS system with ZeroMQ messaging. """
@@ -54,10 +61,10 @@ class SpeechListener:
             input_device_index=mic_index,
             compute_type="float32",
             spinner=True, 
-            min_gap_between_recordings=0.5, 
+            min_gap_between_recordings=0.25, 
             silero_sensitivity=0.95,  
-            webrtc_sensitivity=0,
-            min_length_of_recording=0.5
+            webrtc_sensitivity=3,
+            min_length_of_recording=1.0
         )
 
     def listen_for_duration(self, duration=10):
@@ -72,6 +79,14 @@ class SpeechRecognitionActionServer(Node):
     def __init__(self, zmq_socket):
         super().__init__('question_response_action_node')
         
+        #find the microphone index for ReSpeaker
+        for index, name in enumerate(sr.Microphone.list_microphone_names()):
+            print(f"Microphone with index {index}: {name}")
+            if "ReSpeaker" in name:
+                print(f"Using {index}: {name} as input device")
+                break
+
+
         self._action_server = ActionServer(
             self,
             QuestionResponseRequest,
@@ -81,7 +96,7 @@ class SpeechRecognitionActionServer(Node):
             cancel_callback=self.cancel_callback
         )
         self.zmq_socket = zmq_socket  # ✅ Bind ZMQ socket
-        self.listener = SpeechListener(mic_index=5)
+        self.listener = SpeechListener(mic_index=index)
         
         self.tts = TTS(self.zmq_socket)
 
@@ -101,11 +116,11 @@ class SpeechRecognitionActionServer(Node):
         for i in range(3):
             self.get_logger().info(f"Iteration {i+1}/3: Speaking and Listening")
             self.tts.speak(question if i == 0 else "Sorry, I did not hear that. " + question)
-            self.zmq_socket.send_string("2")  # ✅ Publish 2 before listening
-            print("✅ Sent ZeroMQ message: 2 (Listening started)")
+            self.zmq_socket.send_string("2")  # Publish 2 before listening
+            print("Sent ZeroMQ message: 2 (Listening started)")
             text = self.listener.listen_for_duration(duration=10).lower()
-            self.zmq_socket.send_string("1")  # ✅ Publish 1 after listening
-            print("✅ Sent ZeroMQ message: 1 (Listening stopped)")
+            self.zmq_socket.send_string("1")  # Publish 1 after listening
+            print("Sent ZeroMQ message: 1 (Listening stopped)")
 
             if "yes" in text:
                 result.response = "yes"
